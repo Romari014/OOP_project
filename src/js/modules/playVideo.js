@@ -3,16 +3,33 @@ export default class VideoPlayer {
         this.btns = document.querySelectorAll(triggers);
         this.overlay = document.querySelector(overlay);
         this.close = this.overlay.querySelector('.close');
+        this.onPlayerStateChange = this.onPlayerStateChange.bind(this);
     }
 
     bindTriggers() {
-        this.btns.forEach(btn => {
+        this.btns.forEach((btn, i) => {
+            try {
+                const blockedElem = btn.closest('.module__video-item').nextElementSibling;
+
+                if (i % 2 == 0) {
+                    blockedElem.setAttribute('data-disabled', 'true');
+                }
+            } catch(e) {}
+
             btn.addEventListener('click', () => {
-                if (document.querySelector('iframe#frame')) {//проверка на существующий iframe
-                    this.overlay.style.display = 'flex'; //если есть, открываем его, без проверки будет создан новый
-                } else {                                // и будет звук на фоне если закрыть видео
-                    const  path = btn.getAttribute('data-url'); // если нету iframe, мы его создаем тут
-                    this.createPlayer(path);
+                if (!btn.closest('.module__video-item') || btn.closest('.module__video-item').getAttribute('data-disabled') !== "true") {
+                    this.activeBtn = btn;
+
+                    if (document.querySelector('iframe#frame')) {         //проверка на существующий iframe
+                        this.overlay.style.display = 'flex';              //если есть, открываем его, без проверки будет создан новый
+                        if (this.path !== btn.getAttribute('data-url')) { //и будет звук на фоне если закрыть видео
+                            this.path = btn.getAttribute('data-url'); //Проверяем тыкнул ли пользователь в другую кнопку
+                            this.player.loadVideoById({ videoId: this.path }) //loadVideoById - смотри API youtube
+                        }
+                    } else {
+                        this.path = btn.getAttribute('data-url'); // если нету iframe, мы его создаем тут
+                        this.createPlayer(this.path);
+                    }
                 }
             });
         });
@@ -20,7 +37,7 @@ export default class VideoPlayer {
 
     bindCloseBtn() {
         this.close.addEventListener('click', () => {
-           
+
             this.overlay.style.display = 'none';
             this.player.stopVideo(); //stopVideo функция из АРІ youtube
         });
@@ -30,21 +47,47 @@ export default class VideoPlayer {
         this.player = new YT.Player('frame', {
             height: '100%',
             width: '100%',
-            videoId: `${url}`
-          });
+            videoId: `${url}`,
+            events: {
+                'onStateChange': this.onPlayerStateChange
+            }
+        });
 
-          console.log(this.player);
-          this.overlay.style.display = 'flex';
+
+        this.overlay.style.display = 'flex';
     }
- 
+
+    onPlayerStateChange(state) {
+        try {
+            const blockedElem = this.activeBtn.closest('.module__video-item').nextElementSibling;
+            const playBtn = this.activeBtn.querySelector('svg').cloneNode(true); //tue дает нам глубокое копирование елемента
+
+            if (state.data === 0) {
+                if (blockedElem.querySelector('.play__circle').classList.contains('closed')) {
+                    blockedElem.querySelector('.play__circle').classList.remove('closed');
+                    blockedElem.querySelector('svg').remove();
+                    blockedElem.querySelector('.play__circle').appendChild(playBtn);
+                    blockedElem.querySelector('.play__text').textContent = 'play video';
+                    blockedElem.querySelector('.play__text').classList.remove('attention');
+                    blockedElem.style.opacity = 1;
+                    blockedElem.style.filter = 'none';
+
+                    blockedElem.setAttribute('data-disabled', 'false');
+                }
+            }
+        } catch(e) {}
+    }
+
     init() {
-        const tag = document.createElement('script');
+        if (this.btns.length > 0) {
+            const tag = document.createElement('script');
 
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        this.bindTriggers();
-        this.bindCloseBtn();
+            this.bindTriggers();
+            this.bindCloseBtn();
+        }
     }
 }
